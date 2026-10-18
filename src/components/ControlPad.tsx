@@ -1,9 +1,7 @@
 import type { ReactNode } from 'react'
 import { colorName } from '../data/colors'
-import { ROTATIONS } from '../data/rotations'
 import { SHAPE_MAP } from '../data/shapes'
 import { useEditMode, usePuzzleStore, useSelectedBrickId } from '../store/usePuzzleStore'
-import { RotationIcon } from './RotationIcon'
 
 const arrow = (path: string) => (
   <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden>
@@ -26,6 +24,11 @@ const MOVE_GLYPH = {
   down: arrow('M12 4v13M8 13l4 4 4-4M8 4h8'),
 }
 
+/**
+ * 同层四个方向 + 上升 / 下降一层。
+ * 竖直方向只查穿模：把方块抬起来再挪到别的垛子上、最后按"下降"落到凸点上，
+ * 是手动叠第二层的办法（水平移动时只有"本来就有支撑"的方块才要求落点能扣上）。
+ */
 const MOVES: (PadButton & { dx: number; dy: number; dz: number })[] = [
   { label: '前', hint: 'W', glyph: MOVE_GLYPH.front, dx: 0, dy: 0, dz: -1 },
   { label: '上升', hint: 'E', glyph: MOVE_GLYPH.up, dx: 0, dy: 1, dz: 0 },
@@ -35,17 +38,15 @@ const MOVES: (PadButton & { dx: number; dy: number; dz: number })[] = [
   { label: '右', hint: 'D', glyph: MOVE_GLYPH.right, dx: 1, dy: 0, dz: 0 },
 ]
 
-/** 四个旋转动作和积木旁边的浮动按钮共用一份定义，图标完全一致 */
-const ROTATES = ROTATIONS
-
+/**
+ * 右侧操作台：只保留「平移」。
+ * 旋转交给选中积木旁边浮出来的那列图标按钮，这里不再重复放一套。
+ */
 export function ControlPad() {
   const editable = useEditMode()
   const selectedId = useSelectedBrickId()
   const bricks = usePuzzleStore((s) => s.puzzles.find((p) => p.id === s.activeId)?.bricks)
   const moveSelected = usePuzzleStore((s) => s.moveSelected)
-  const rotateSelected = usePuzzleStore((s) => s.rotateSelected)
-  const deleteSelected = usePuzzleStore((s) => s.deleteSelected)
-  const clearBricks = usePuzzleStore((s) => s.clearBricks)
 
   const selected = bricks?.find((b) => b.id === selectedId) ?? null
   const shape = selected ? SHAPE_MAP.get(selected.shapeId) : undefined
@@ -54,19 +55,18 @@ export function ControlPad() {
 
   return (
     <div className="pad">
+      {/* 目标条一直占位（没选中时只是不可见），点选方块时高度不会跳 */}
       <div className="pad__head">
         <span className="pad__title">
           操作台<i>{total}</i>
         </span>
-        <span className={`pad__target${selected ? '' : ' is-empty'}`}>
-          {selected && shape ? (
+        <span className={`pad__target${selected && shape ? '' : ' is-blank'}`}>
+          {selected && shape && (
             <>
               <i style={{ background: selected.color }} />
               <b>{shape.label}</b>
               <span>{colorName(selected.color)}</span>
             </>
-          ) : (
-            <span>未选中方块 · 到场景里点一个</span>
           )}
         </span>
       </div>
@@ -74,7 +74,7 @@ export function ControlPad() {
       <div className={`pad__body${disabled ? ' is-locked' : ''}`}>
         <div className="pad__section">
           <div className="pad__section-title">
-            平移<span>同层前后左右 / 上下</span>
+            平移<span>前后左右 / 上下</span>
           </div>
           <div className="pad__grid pad__grid--move">
             {MOVES.map((m) => (
@@ -93,54 +93,6 @@ export function ControlPad() {
             ))}
           </div>
         </div>
-
-        <div className="pad__section">
-          <div className="pad__section-title">
-            旋转<span>90° 步进</span>
-          </div>
-          <div className="pad__grid pad__grid--rotate">
-            {ROTATES.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                className="pad__btn"
-                disabled={disabled}
-                title={`${r.label}（${r.hint}）`}
-                onClick={() => rotateSelected(r.axis, r.dir)}
-              >
-                <i className="pad__glyph">
-                  <RotationIcon action={r} />
-                </i>
-                <b>{r.label}</b>
-                <em>{r.hint}</em>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="pad__foot">
-        <button
-          type="button"
-          className="pad__btn pad__btn--danger"
-          disabled={disabled}
-          onClick={deleteSelected}
-        >
-          <b>删除选中方块</b>
-          <em>Delete</em>
-        </button>
-        <button
-          type="button"
-          className="pad__btn"
-          disabled={!editable || total === 0}
-          title="清空托盘里的全部方块"
-          onClick={() => {
-            if (total > 0 && window.confirm(`确定清空托盘里的 ${total} 个方块？`)) clearBricks()
-          }}
-        >
-          <b>清空托盘</b>
-          <em>{total} 块</em>
-        </button>
       </div>
     </div>
   )

@@ -1,13 +1,12 @@
 /**
  * 四个 90° 步进旋转动作。
  *
- * 右侧操作台的「旋转」区，和选中积木旁浮出来的透明图标按钮，
- * 共用这一份定义：图标、轴向、方向、快捷键都只有一处来源，不会两边跑偏。
+ * 只给选中积木旁浮出来的那列透明图标按钮使用（不绑键盘快捷键）：
+ * 图标、轴向、方向都只有一处来源。
  */
 export interface RotationAction {
   id: string
   label: string
-  hint: string
   axis: 'x' | 'y'
   dir: 1 | -1
   /** 图标：一个居中示意的小积木 + 旋转指示 */
@@ -20,7 +19,6 @@ export const ROTATIONS: RotationAction[] = [
     /* 向上翻：绕 X 轴 -90°，积木顶面朝里翻过去 */
     id: 'tip-up',
     label: '向上翻转',
-    hint: '⇧T',
     axis: 'x',
     dir: -1,
     rect: [8, 13, 8, 6.5, 1.6],
@@ -30,7 +28,6 @@ export const ROTATIONS: RotationAction[] = [
     /* 向下翻：绕 X 轴 +90°，积木顶面朝自己翻过来 */
     id: 'tip-down',
     label: '向下翻转',
-    hint: 'T',
     axis: 'x',
     dir: 1,
     rect: [8, 4.5, 8, 6.5, 1.6],
@@ -40,7 +37,6 @@ export const ROTATIONS: RotationAction[] = [
     /* 向左转：绕 Y 轴 -90°，绕积木逆时针一圈 */
     id: 'turn-left',
     label: '向左旋转',
-    hint: '⇧R',
     axis: 'y',
     dir: -1,
     rect: [8.5, 8.5, 7, 7, 1.6],
@@ -50,7 +46,6 @@ export const ROTATIONS: RotationAction[] = [
     /* 向右转：绕 Y 轴 +90°，积木正面转向屏幕右侧 */
     id: 'turn-right',
     label: '向右旋转',
-    hint: 'R',
     axis: 'y',
     dir: 1,
     rect: [8.5, 8.5, 7, 7, 1.6],

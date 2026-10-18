@@ -37,22 +37,14 @@ export interface Brick {
   ry: number
 }
 
-/** 容器格子里的零件：同一格只放同一种造型 + 同一种颜色 */
-export interface PartPreset {
-  shapeId: string
-  color: string
-  count: number
-}
-
 /**
- * 底部容器的一个格子。
- * `count <= 0` 视作空格子；但会保留 shapeId / color 作为「上次放入」的记忆，方便一键补货。
+ * 零件盒的一个格子：一格 = 一个造型 + 一个颜色，取用不限量。
+ * `shapeId === null` 表示空格子（造型数量凑不满一排时的尾巴）。
  */
 export interface ContainerCell {
   id: string
   shapeId: string | null
   color: string | null
-  count: number
 }
 
 /** 底部容器：固定 `cols` 列，格子数即总格数（排数 = cells.length / cols） */

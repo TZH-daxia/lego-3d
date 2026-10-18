@@ -1,4 +1,5 @@
 import { useId, useMemo } from 'react'
+import { STUD_R, slopeFlat } from '../lib/grid'
 import type { ShapeDef } from '../types'
 
 /**
@@ -10,8 +11,7 @@ const K = Math.cos(Math.PI / 6)
 const H = Math.sin(Math.PI / 6)
 /** 一个板高的世界高度 */
 const PLATE_H = 0.42
-/** 凸点半径（世界单位，与 3D 一致） */
-const STUD_R = 0.3
+
 
 type P3 = [number, number, number]
 
@@ -24,6 +24,18 @@ const toPoints = (pts: P3[]) => pts.map(([u, v, t]) => pt(px(u, v), py(u, v, t))
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.min(Math.max(v, lo), hi)
+}
+
+/** 相对亮度：用来给深色件换成浅色描边，否则黑件糊成一团 */
+function luminance(hex: string): number {
+  const clean = hex.replace('#', '')
+  const num = parseInt(clean.length === 3 ? clean.replace(/(.)/g, '$1$1') : clean, 16)
+  return 0.299 * ((num >> 16) & 255) + 0.587 * ((num >> 8) & 255) + 0.114 * (num & 255)
+}
+
+/** 描边色：浅色件压暗，深色件提亮，保证任何颜色下结构线都看得清 */
+function edgeTone(hex: string): string {
+  return luminance(hex) < 86 ? 'rgba(255, 255, 255, 0.52)' : shade(hex, -74)
 }
 
 /** 同一色相做明暗，模拟等轴测下各面的受光差异 */
@@ -81,7 +93,7 @@ function buildIcon(shape: ShapeDef, color: string): IconModel {
   }
 
   if (shape.kind === 'round') {
-    /* ---------- 圆柱：顶面椭圆 + 侧壁（两段椭圆弧 + 两条竖直切线） ---------- */
+    /* ---------- 圆柱：顶面椭圆 + 可见侧壁（前沿两段弧 + 两条竖直母线） ---------- */
     const r = Math.min(w, d) / 2
     const cu = w / 2
     const cv = d / 2
@@ -93,34 +105,35 @@ function buildIcon(shape: ShapeDef, color: string): IconModel {
       cy + H * r * (Math.cos(theta) + Math.sin(theta)),
     ]
 
-    const ARC = (Math.PI * 2) / 18
+    const ARC = (Math.PI * 2) / 24
     const arc = (cy: number, from: number, to: number) => {
-      const out: string[] = []
+      const out: [number, number][] = []
       const steps = Math.max(4, Math.round(Math.abs(to - from) / ARC))
       for (let i = 0; i <= steps; i++) {
-        const [x, y] = at(from + ((to - from) * i) / steps, cy)
-        probe.push([x, y])
-        out.push(pt(x, y))
+        const p = at(from + ((to - from) * i) / steps, cy)
+        probe.push(p)
+        out.push(p)
       }
       return out
     }
 
-    const TOP = Math.PI * 1.25
-    const BOTTOM = Math.PI * 0.25
-    const outline = [...arc(cyTop, TOP, TOP + Math.PI), ...arc(cyBot, BOTTOM, BOTTOM + Math.PI)]
-    body = `M${outline[0]} L${outline.slice(1).join(' L')} Z`
+    // 屏幕上的左右极值母线：135°（左）与 -45°（右）；前沿经过 45°（正下方）
+    const LEFT = (Math.PI * 3) / 4
+    const RIGHT = -Math.PI / 4
+
+    const wall = [...arc(cyTop, LEFT, RIGHT), ...arc(cyBot, RIGHT, LEFT)]
+    body = `M${wall.map(([x, y]) => pt(x, y)).join(' L')} Z`
 
     const cap: string[] = []
-    for (let i = 0; i < 30; i++) {
-      const [x, y] = at((i / 30) * Math.PI * 2, cyTop)
+    for (let i = 0; i < 36; i++) {
+      const [x, y] = at((i / 36) * Math.PI * 2, cyTop)
       cap.push(pt(x, y))
     }
-    faces.push({ key: 'cap', points: cap.join(' '), fill: shade(color, 8) })
+    faces.push({ key: 'cap', points: cap.join(' '), fill: shade(color, 10) })
     addStud('r0', cu, cv, h)
   } else if (shape.kind === 'slope') {
     /* ---------- 斜面：平顶在后段，45° 坡朝 +z（和 3D 几何体一致） ---------- */
-    const run = Math.min(h, d)
-    const flat = Math.min(d, run)
+    const flat = slopeFlat(h, d)
     faces.push({
       key: 'top',
       points: toPoints([
@@ -159,7 +172,8 @@ function buildIcon(shape: ShapeDef, color: string): IconModel {
     )
     for (let i = 0; i < w; i++) {
       for (let j = 0; j < d; j++) {
-        if (j + 0.5 + STUD_R > flat) continue
+        // 只保留落在平顶里的凸点（和 3D 几何的判据一致）
+        if (j + 0.5 < 0.02 || j + 0.5 > flat - 0.02) continue
         addStud(`s${i}-${j}`, i + 0.5, j + 0.5, h)
       }
     }
@@ -235,7 +249,7 @@ export function ShapeIcon({ shape, color }: Props) {
   const model = useMemo(() => buildIcon(shape, color), [shape, color])
   const rawId = useId()
   const gradId = `cyl-${rawId.replace(/[^a-zA-Z0-9]/g, '')}`
-  const edge = shade(color, -64)
+  const edge = edgeTone(color)
 
   return (
     <svg
@@ -278,7 +292,10 @@ export function ShapeIcon({ shape, color }: Props) {
           rx={STUD_R}
           ry={STUD_R}
           transform={`matrix(${K},${H},${-K},${H},${round3(stud.x)},${round3(stud.y)})`}
-          fill={shade(color, 30)}
+          /* 凸点用更亮的顶面 + 亮暗自适应的描边，缩到 40px 也能看出是一颗颗凸起 */
+          fill={shade(color, 34)}
+          stroke={edge}
+          strokeWidth={0.05}
         />
       ))}
     </svg>

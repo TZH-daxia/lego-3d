@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { PLATE, STUD } from '../../lib/grid'
+import { PLATE, STUD, STUD_H, STUD_R, slopeFlat } from '../../lib/grid'
 import type { ShapeDef } from '../../types'
 
 export interface BrickGeometry {
@@ -9,8 +9,15 @@ export interface BrickGeometry {
   studs: THREE.BufferGeometry | null
 }
 
-const STUD_RADIUS = STUD * 0.3
-const STUD_HEIGHT = STUD * 0.22
+const STUD_RADIUS = STUD_R
+const STUD_HEIGHT = STUD_H
+
+/**
+ * 圆柱件直径比占位盒小一圈：真实乐高 2×2 圆砖 Ø15.8mm、格距 16mm ⇒ 0.9875。
+ * 相邻两个圆件之间因此留出 0.025 的缝（贴着看也不会像"边缘插进对方"），
+ * 同时把身下 4 个格子中心的凸点（斜向 0.707 + 0.27 = 0.977）整个罩住。
+ */
+const ROUND_INSET = 0.9875
 
 const cache = new Map<string, BrickGeometry>()
 let studProto: THREE.CylinderGeometry | null = null
@@ -20,22 +27,18 @@ function studGeometry(): THREE.CylinderGeometry {
   return studProto
 }
 
-/** 斜面剖面的水平投影长度（45° 斜面） */
-function slopeRun(h: number, d: number) {
-  return Math.min(d, h)
-}
-
 /**
- * 斜面：平顶占 depth = run，坡面朝 +z（默认相机所在方向），
- * 全高的一面在 -z。方向和 2D 等轴测图标完全一致。
+ * 斜面：平顶占 depth = slopeFlat()（至少 1 个凸点宽），坡面朝 +z（默认相机所在方向），
+ * 坡脚落在 +z 底边、坡面固定 45°，全高的一面在 -z。
+ * 方向和 2D 等轴测图标完全一致。
  */
 function makeSlope(w: number, h: number, d: number): THREE.BufferGeometry {
-  const run = slopeRun(h, d)
+  const flat = slopeFlat(h, d)
   const profile = new THREE.Shape()
   profile.moveTo(d / 2, -h / 2)
   profile.lineTo(-d / 2, -h / 2)
   profile.lineTo(-d / 2, h / 2)
-  profile.lineTo(-d / 2 + run, h / 2)
+  profile.lineTo(-d / 2 + flat, h / 2)
   profile.closePath()
 
   const geo = new THREE.ExtrudeGeometry(profile, { depth: w, bevelEnabled: false })
@@ -56,14 +59,15 @@ function makeStuds(shape: ShapeDef, h: number, d: number): THREE.BufferGeometry 
     g.translate(0, y, 0)
     parts.push(g)
   } else {
-    // 斜面只有平顶（z 从 -d/2 到 -d/2+run）上才有凸点，凸点必须完整落在平顶内
+    // 斜面只有平顶（z 从 -d/2 到 -d/2+flat）上才有凸点
     const isSlope = shape.kind === 'slope'
-    const run = isSlope ? slopeRun(h, d) : 0
+    const flat = isSlope ? slopeFlat(h, d) : 0
     for (let i = 0; i < shape.w; i++) {
       const sx = (i + 0.5 - shape.w / 2) * STUD
       for (let j = 0; j < shape.d; j++) {
         const sz = (j + 0.5 - shape.d / 2) * STUD
-        if (isSlope && (sz - STUD_RADIUS < -d / 2 || sz + STUD_RADIUS > -d / 2 + run)) continue
+        // 以凸点中心是否落在平顶里为准（平顶至少 1 个凸点宽，不会骑在坡口上）
+        if (isSlope && (sz < -d / 2 + 0.02 || sz > -d / 2 + flat - 0.02)) continue
         const g = proto.clone()
         g.translate(sx, y, sz)
         parts.push(g)
@@ -85,8 +89,9 @@ export function getBrickGeometry(shape: ShapeDef): BrickGeometry {
 
   let body: THREE.BufferGeometry
   if (shape.kind === 'round') {
-    const r = Math.min(w, d) / 2
-    body = new THREE.CylinderGeometry(r, r, h, 40)
+    // 直筒（真实圆件几乎不收口），直径按 0.9875 略小于占位盒
+    const r = (Math.min(w, d) / 2) * ROUND_INSET
+    body = new THREE.CylinderGeometry(r, r, h, 48)
   } else if (shape.kind === 'slope') {
     body = makeSlope(w, h, d)
   } else {

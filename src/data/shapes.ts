@@ -104,3 +104,62 @@ export const SHAPES: ShapeDef[] = [
 export const SHAPE_MAP: Map<string, ShapeDef> = new Map(SHAPES.map((s) => [s.id, s]))
 
 export const SHAPE_GROUPS = ['砖块', '薄板', '特殊件'] as const
+
+/**
+ * 零件的常用度排序（零件盒按这个顺序铺开）。
+ *
+ * 参考套装零件用量统计：使用频率最高的依次是
+ * 2×4 基础砖 → 1×4 / 1×2 砖 → 各类板件与薄片 → 1×1 圆柱 → 斜面 → 其它，
+ * 大尺寸（2×8 / 4×8 / 1×6 / 1×8）出现得最少，所以排在最后。
+ */
+export const SHAPE_POPULARITY: string[] = [
+  'b2x4', // 2×4 砖：最常见的基础件
+  'p2x4', // 2×4 薄板：现代套装里用量最大的板
+  'b1x4',
+  'b1x2',
+  'b2x2',
+  'p1x2',
+  'p2x2',
+  't1x2',
+  'b1x1',
+  'p1x4',
+  'rp1x1', // 1×1 圆薄板
+  'b2x3',
+  'b2x6',
+  's2x2',
+  'p2x6',
+  'r1x1',
+  't1x1',
+  'p2x3',
+  'b1x3',
+  's2x4',
+  'r2x2',
+  'rp2x2',
+  't2x2',
+  'p4x4',
+  'b4x4',
+  'p2x8',
+  'p4x8',
+  'b1x6',
+  'b1x8',
+]
+
+const POPULARITY_RANK = new Map(SHAPE_POPULARITY.map((id, i) => [id, i]))
+
+/** 零件盒的品类顺序：先砖类、再板类、最后特殊件（平滑片 / 圆柱 / 斜面） */
+const KIND_ORDER: Record<ShapeDef['kind'], number> = {
+  brick: 0,
+  plate: 1,
+  tile: 2,
+  round: 3,
+  slope: 4,
+}
+
+/** 零件盒展示顺序：先按品类分块，块内按常用度 */
+export const SHAPES_CATALOG: ShapeDef[] = SHAPES.slice().sort((a, b) => {
+  const byKind = KIND_ORDER[a.kind] - KIND_ORDER[b.kind]
+  if (byKind !== 0) return byKind
+  const ra = POPULARITY_RANK.get(a.id) ?? Number.MAX_SAFE_INTEGER
+  const rb = POPULARITY_RANK.get(b.id) ?? Number.MAX_SAFE_INTEGER
+  return ra - rb
+})

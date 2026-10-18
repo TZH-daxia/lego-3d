@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { SHAPE_MAP } from '../../data/shapes'
 import { suspendOrbitForPointer } from '../../lib/camera'
-import { PLATE, STUD, orientedSize, worldCenter } from '../../lib/grid'
+import { PLATE, STUD, brickFitScale, mod4, orientedSize, worldCenter } from '../../lib/grid'
 import { markShadowDirty } from '../../lib/shadow'
 import { useEditMode, usePuzzleStore } from '../../store/usePuzzleStore'
 import type { Brick as BrickModel } from '../../types'
@@ -58,6 +58,10 @@ export function Brick({ brick }: { brick: BrickModel }) {
   const yawRef = useRef<THREE.Group>(null!)
 
   const { body, studs } = getBrickGeometry(shape)
+  // 翻转后几何体的自然尺寸和占位盒对不上，按需缩放塞回盒子里，避免戳出底面穿模
+  const fit = useMemo(() => brickFitScale(shape, brick.rx, brick.ry), [shape, brick.rx, brick.ry])
+  /** 凸点只在正面朝上时露出来（翻转/倒扣后顶面已经不是朝上的平面） */
+  const studsUp = mod4(brick.rx) === 0
 
   const material = useMemo(
     () =>
@@ -191,9 +195,11 @@ export function Brick({ brick }: { brick: BrickModel }) {
         }}
       >
         <group ref={yawRef}>
-          <group ref={pitchRef}>
+          <group ref={pitchRef} scale={fit}>
             <mesh geometry={body} material={material} castShadow receiveShadow />
-            {studs && <mesh geometry={studs} material={material} castShadow receiveShadow />}
+            {studs && studsUp && (
+              <mesh geometry={studs} material={material} castShadow receiveShadow />
+            )}
           </group>
         </group>
         {selected && editable && (

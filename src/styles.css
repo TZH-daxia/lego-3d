@@ -37,8 +37,8 @@
   --r-lg: 14px;
   --r-xl: 20px;
 
-  /* 零件盒格子边长（正方形，尺寸恒定，只受这个变量影响） */
-  --cell: 60px;
+  /* 零件盒每排的高度（宽度由 1fr 均分，排数多了自动往下加） */
+  --cell: 56px;
 
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --shadow-lg: 0 30px 90px rgba(0, 0, 0, 0.66);
@@ -251,24 +251,14 @@ b {
   color: var(--dim);
 }
 
-/* 2×2 凸点铭牌，左上角切角 */
-.brand-stud {
-  position: relative;
-  flex: 0 0 34px;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 3px;
-  width: 34px;
-  height: 34px;
-  padding: 5px;
-  background: linear-gradient(150deg, var(--accent-hi), #dda41f);
-  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);
-  box-shadow: 0 6px 18px rgba(221, 164, 31, 0.26);
-}
-
-.brand-stud i {
-  border-radius: 50%;
-  background: rgba(36, 27, 2, 0.34);
+/* 左上角品牌位：LEGO 官方 logo + 站名 */
+.brand-logo {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .sidebar__new {
@@ -413,7 +403,8 @@ b {
   border-color: rgba(99, 201, 198, 0.3);
 }
 
-.session__del {
+/* 列表右侧的「⋮」：点开是重命名 / 删除 */
+.session__more {
   flex: 0 0 24px;
   width: 24px;
   height: 24px;
@@ -428,14 +419,78 @@ b {
   transition: opacity 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
 
-.session:hover .session__del,
-.session__del:focus-visible {
+.session:hover .session__more,
+.session__more:focus-visible,
+.session__more.is-open {
   opacity: 1;
 }
 
-.session__del:hover {
-  background: rgba(224, 87, 74, 0.16);
+.session__more:hover,
+.session__more.is-open {
+  background: var(--ink-700);
+  color: var(--text);
+}
+
+/* 「⋮」弹出的操作小窗（fixed 定位，避免被列表滚动区裁掉） */
+.session-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 126px;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-2);
+  background: #1b1a18;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(0, 0, 0, 0.35);
+  animation: fade-in 0.12s var(--ease) both;
+}
+
+.session-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 9px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.session-menu__item i {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  transition: color 0.14s ease;
+}
+
+.session-menu__item:hover {
+  background: var(--ink-700);
+  color: var(--text);
+}
+
+.session-menu__item:hover i {
+  color: var(--accent);
+}
+
+.session-menu__item.is-danger {
   color: #ff8b7f;
+}
+
+.session-menu__item.is-danger i {
+  color: #e0574a;
+}
+
+.session-menu__item.is-danger:hover {
+  background: rgba(224, 87, 74, 0.16);
+  color: #ffb3a9;
 }
 
 .sidebar__empty {
@@ -538,18 +593,34 @@ b {
 
 /* ---------------- 方向罗盘 ---------------- */
 
-/* 罗盘和「编辑 / 保存」同处一条右上角工具带，顶部对齐 */
+/* 罗盘和「编辑 / 保存」同处一条右上角工具带，顶部对齐；罗盘整个就是重置视角按钮 */
 .compass {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  padding: 8px 8px 6px;
+  display: grid;
+  place-items: center;
+  padding: 7px;
   border-radius: var(--r-lg);
   border: 1px solid var(--line-2);
   background: rgba(19, 18, 16, 0.92);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
   animation: fade-in 0.7s 0.2s var(--ease) both;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s var(--ease),
+    background 0.16s ease;
+}
+
+.compass:hover {
+  border-color: rgba(242, 205, 55, 0.55);
+  background: rgba(26, 24, 21, 0.96);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(242, 205, 55, 0.16);
+}
+
+.compass:active {
+  transform: scale(0.97);
+}
+
+.compass:focus-visible {
+  outline: none;
+  border-color: var(--accent);
 }
 
 .compass__dial {
@@ -629,6 +700,12 @@ b {
   top: 11px;
 }
 
+/* 「前」是托盘的正前方，用醒目的红色标出来 */
+.compass__dir--front b {
+  color: #ff5a45;
+  text-shadow: 0 0 9px rgba(255, 90, 69, 0.6);
+}
+
 .compass__dir--back {
   left: 50%;
   top: 67px;
@@ -644,30 +721,12 @@ b {
   top: 39px;
 }
 
-.compass__reset {
-  width: 100%;
-  height: 21px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--muted);
-  font-family: var(--font-display);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  transition: color 0.16s ease, border-color 0.16s ease;
-}
-
-.compass__reset:hover {
-  color: var(--accent);
-  border-color: rgba(243, 193, 75, 0.5);
-}
-
 /* ---------------- 积木旁的浮动旋转按钮 ---------------- */
 
 /**
  * 外层只负责定位：transform 由画布里的 AnchorTracker 每帧写成
- * translate3d(屏幕 x, 屏幕 y)，锚点是积木右边缘。
+ * translate3d(屏幕 x, 屏幕 y)，x/y 是积木屏幕投影包围盒的「右边缘 + 垂直中心」，
+ * 横向间距（GAP）也在那边算，所以视角怎么转按钮都在积木右边。
  */
 .brick-tools {
   position: absolute;
@@ -678,12 +737,11 @@ b {
   will-change: transform;
 }
 
-/* 内层再做偏移：右边留 16px 间距，并整体垂直居中 */
+/* 内层只做垂直居中：按钮列的中心对齐积木投影的垂直中心 */
 .brick-tools__list {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-left: 16px;
   transform: translateY(-50%);
   pointer-events: none;
 }
@@ -803,14 +861,53 @@ b {
 /* ---------------- 底部工作面 ---------------- */
 
 .dock {
+  position: relative;
   display: flex;
-  /* 下限保证默认三排正方形格子完整可见；窗口太矮时才让出空间给 3D 视口 */
-  height: clamp(min(300px, 56vh), 40vh, 420px);
+  /* 高度由 Editor 里的 useDockResize 以内联样式给出（可拖拽调节） */
+  min-height: 52px;
   border-top: 1px solid var(--line);
   background: linear-gradient(180deg, var(--ink-850), var(--ink-900));
   box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.4);
   animation: rise 0.55s 0.05s var(--ease) both;
+  /* 拖到最矮（只留色板）时，操作台不往上溢出 */
+  overflow: hidden;
 }
+
+/* 顶部拖拽条：上下拖 = 调整零件盒高度（双击恢复默认） */
+.dock__resizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  height: 10px;
+  display: grid;
+  place-items: center;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.dock__resizer::after {
+  content: '';
+  width: 46px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  transition: background 0.16s ease, width 0.16s var(--ease);
+}
+
+.dock__resizer:hover::after,
+.dock__resizer.is-dragging::after {
+  width: 68px;
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(242, 205, 55, 0.5);
+}
+
+.dock__resizer.is-dragging {
+  background: linear-gradient(180deg, rgba(242, 205, 55, 0.12), transparent);
+}
+
+
 
 .dock__main {
   flex: 1;
@@ -842,47 +939,14 @@ b {
   gap: 9px;
 }
 
-/* 零件盒上方只有一条：左边色板，右边增减排数 */
+/* 零件盒上方只有一条：色板（给选中方块改色） */
 .parts__head {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.parts__tools {
-  flex: 0 0 auto;
-  display: flex;
-  gap: 6px;
-}
-
-.tool-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 26px;
-  padding: 0 9px;
-  border-radius: 999px;
-  border: 1px solid var(--line-2);
-  background: var(--ink-800);
-  color: var(--text-2);
-  font-family: var(--font-display);
-  font-size: 11px;
-  cursor: pointer;
-  transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease;
-}
-
-.tool-btn:hover:not(:disabled) {
-  border-color: rgba(243, 193, 75, 0.5);
-  color: var(--accent);
-  background: rgba(243, 193, 75, 0.08);
-}
-
-.tool-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-/* 外框的滚动容器：外框与色板左对齐，排数多了整体纵向滚动 */
+/* 外框的滚动容器：零件放不下就在这里面纵向滚动 */
 .parts__scroll {
   flex: 1;
   min-height: 0;
@@ -895,15 +959,34 @@ b {
   padding: 2px;
 }
 
+.parts__scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.parts__scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.parts__scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.parts__scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
 /**
  * 零件盒 = 一个外框 + 连续网格线（一排排的方格）。
- * 格子尺寸写死（--cell），所以增减排数只改变高度，格子大小恒定。
+ * 横向由 1fr 列铺满宽度，纵向每排固定 --cell 高，
+ * 排数由造型数量决定（格子不够就自动多一排）。
  */
 .parts__grid {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
   display: grid;
-  grid-template-columns: repeat(var(--cols, 8), var(--cell, 60px));
-  grid-auto-rows: var(--cell, 60px);
+  grid-template-columns: repeat(var(--cols, 8), minmax(0, 1fr));
+  grid-auto-rows: var(--cell, 58px);
   gap: 1px;
   padding: 1px;
   border: 1px solid var(--line-2);
@@ -961,14 +1044,6 @@ b {
   transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.part-cell.is-filled {
-  cursor: grab;
-}
-
-.part-cell.is-source {
-  cursor: grabbing;
-}
-
 /* 悬停只换底色 + 内侧描边：不做位移，连续网格线才不会看着"叠起来" */
 .part-cell:hover {
   background: var(--ink-700);
@@ -979,58 +1054,18 @@ b {
   background: var(--ink-600);
 }
 
-.part-cell.is-empty {
-  background: rgba(0, 0, 0, 0.26);
+/* 造型凑不满一排时的尾巴格子：只占位，不响应 */
+.part-cell.is-blank {
+  background: rgba(0, 0, 0, 0.22);
+  cursor: default;
+  pointer-events: none;
 }
 
-.part-cell.is-empty:hover {
-  background: rgba(243, 193, 75, 0.1);
-}
-
-.part-cell.is-ghost {
-  background: rgba(243, 193, 75, 0.05);
-  box-shadow: inset 0 0 0 1px rgba(243, 193, 75, 0.2);
-}
-
-/* 绝对定位：图标固有尺寸不参与行高计算，格子永远是正方形 */
+/* 绝对定位：图标固有尺寸不参与行高计算 */
 .part-cell__icon {
   position: absolute;
   inset: 10% 11% 20% 11%;
   display: block;
-}
-
-.part-cell__plus {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: var(--dim);
-  transition: color 0.16s ease, transform 0.2s var(--ease);
-}
-
-.part-cell:hover .part-cell__plus {
-  color: var(--accent);
-  transform: scale(1.12) rotate(90deg);
-}
-
-/* 数量角标固定在格子右上角内侧，不会被网格裁掉，也不压住图形主体 */
-.part-cell__count {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  min-width: 17px;
-  height: 17px;
-  padding: 0 4px;
-  display: grid;
-  place-items: center;
-  border-radius: 5px;
-  background: linear-gradient(180deg, var(--accent-hi), var(--accent));
-  color: var(--accent-ink);
-  font-family: var(--font-display);
-  font-size: 10.5px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
 }
 
 .part-cell__label {
@@ -1052,64 +1087,13 @@ b {
   color: var(--text-2);
 }
 
-.part-cell__acts {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  display: flex;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity 0.16s ease;
-}
-
-.part-cell:hover .part-cell__acts,
-.part-cell:focus-within .part-cell__acts {
-  opacity: 1;
-}
-
-.part-cell__act {
-  width: 17px;
-  height: 17px;
-  display: grid;
-  place-items: center;
-  border-radius: 5px;
-  border: 1px solid var(--line-2);
-  background: rgba(10, 9, 8, 0.82);
-  color: var(--text-2);
-  cursor: pointer;
-  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
-}
-
-.part-cell__act:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.part-cell__refill {
-  position: absolute;
-  bottom: 3px;
-  font-family: var(--font-display);
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  color: rgba(243, 193, 75, 0.72);
-}
-
-/* 取件 / 换位反馈 */
+/* 取件反馈 */
 .part-cell.is-taken {
   animation: cell-take 0.42s var(--ease);
 }
 
 .part-cell.is-denied {
   animation: cell-deny 0.42s ease;
-}
-
-.part-cell.is-source {
-  opacity: 0.34;
-}
-
-.part-cell.is-target {
-  background: rgba(243, 193, 75, 0.18);
-  box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
 /* ---------------- 色板（放在零件盒上方，整体左对齐） ---------------- */
@@ -1140,10 +1124,6 @@ b {
 
 .colors .swatch {
   height: 21px;
-}
-
-.modal .swatch {
-  aspect-ratio: 1 / 1;
 }
 
 .swatch:hover:not(:disabled) {
@@ -1178,6 +1158,7 @@ b {
 }
 
 .pad__title {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -1217,6 +1198,12 @@ b {
   text-overflow: ellipsis;
 }
 
+/* 没选中方块时目标条留空占位：点来点去高度完全不跳 */
+.pad__target.is-blank {
+  border-color: transparent;
+  background: transparent;
+}
+
 .pad__target i {
   flex: 0 0 11px;
   width: 11px;
@@ -1236,12 +1223,6 @@ b {
   color: var(--dim);
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.pad__target.is-empty {
-  color: var(--dim);
-  border-style: dashed;
-  background: transparent;
 }
 
 .pad__body {
@@ -1284,10 +1265,6 @@ b {
 
 .pad__grid--move {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.pad__grid--rotate {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .pad__btn {
@@ -1341,35 +1318,6 @@ b {
 
 .pad__btn:disabled {
   cursor: not-allowed;
-}
-
-.pad__foot {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 6px;
-  margin-top: auto;
-}
-
-.pad__btn--danger {
-  justify-content: center;
-  border-color: rgba(224, 87, 74, 0.32);
-  background: rgba(224, 87, 74, 0.1);
-}
-
-.pad__btn--danger b {
-  color: #ff9083;
-}
-
-.pad__btn--danger:hover:not(:disabled) {
-  border-color: rgba(224, 87, 74, 0.7);
-  background: rgba(224, 87, 74, 0.2);
-}
-
-.pad__foot .pad__btn:not(.pad__btn--danger) {
-  justify-content: center;
-  background: transparent;
-  border-color: var(--line);
-  color: var(--text-2);
 }
 
 /* ---------------- 零件弹窗 ---------------- */
@@ -1483,280 +1431,6 @@ b {
   border-color: var(--line-3);
   background: var(--ink-700);
   color: var(--text);
-}
-
-.modal__body {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  gap: 18px;
-  padding: 18px 22px;
-}
-
-.picker {
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.picker__tabs {
-  display: flex;
-  gap: 5px;
-  padding: 3px;
-  border-radius: var(--r-md);
-  border: 1px solid var(--line);
-  background: var(--ink-900);
-}
-
-.picker__tab {
-  flex: 1;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: none;
-  border-radius: var(--r-sm);
-  background: transparent;
-  font-family: var(--font-display);
-  font-size: 11.5px;
-  letter-spacing: 0.03em;
-  color: var(--muted);
-  cursor: pointer;
-  transition: background 0.16s ease, color 0.16s ease;
-}
-
-.picker__tab i {
-  font-style: normal;
-  font-size: 9.5px;
-  color: var(--dim);
-  font-variant-numeric: tabular-nums;
-}
-
-.picker__tab:hover {
-  color: var(--text);
-}
-
-.picker__tab.is-on {
-  background: linear-gradient(180deg, var(--ink-600), var(--ink-700));
-  color: var(--text);
-  box-shadow: inset 0 0 0 1px var(--line-2);
-}
-
-.picker__tab.is-on i {
-  color: var(--accent);
-}
-
-.picker__grid {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: 8px;
-  align-content: start;
-  overflow-y: auto;
-  padding-right: 4px;
-  scrollbar-gutter: stable;
-}
-
-.pick {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  height: 78px;
-  padding: 6px 4px;
-  border-radius: var(--r-md);
-  border: 1px solid var(--line);
-  background: linear-gradient(180deg, var(--ink-750), var(--ink-850));
-  cursor: pointer;
-  transition: transform 0.16s var(--ease), border-color 0.16s ease, background 0.16s ease;
-}
-
-.pick:hover {
-  transform: translateY(-2px);
-  border-color: var(--line-3);
-  background: linear-gradient(180deg, var(--ink-700), var(--ink-800));
-}
-
-.pick.is-on {
-  border-color: var(--accent);
-  background: linear-gradient(180deg, rgba(243, 193, 75, 0.14), rgba(243, 193, 75, 0.03));
-  box-shadow: 0 0 0 1px var(--accent), 0 8px 20px rgba(243, 193, 75, 0.14);
-}
-
-.pick__icon {
-  display: block;
-  width: 78%;
-  height: 52px;
-}
-
-.pick__label {
-  font-family: var(--font-display);
-  font-size: 10px;
-  letter-spacing: 0.05em;
-  color: var(--dim);
-}
-
-.pick.is-on .pick__label {
-  color: var(--accent);
-}
-
-.modal__side {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-height: 0;
-}
-
-.preview {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px;
-  border-radius: var(--r-lg);
-  border: 1px solid var(--line);
-  background: radial-gradient(120% 140% at 22% 12%, rgba(243, 193, 75, 0.09), transparent 62%),
-    var(--ink-900);
-}
-
-.preview__stage {
-  flex: 0 0 78px;
-  width: 78px;
-  height: 62px;
-  display: grid;
-  place-items: center;
-}
-
-.preview__meta {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.preview__meta b {
-  font-family: var(--font-display);
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.preview__meta em {
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.field__label {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-family: var(--font-display);
-  font-size: 10.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.field__label i {
-  font-style: normal;
-  letter-spacing: 0;
-  color: var(--dim);
-  font-variant-numeric: tabular-nums;
-}
-
-.swatches {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.stepper {
-  display: flex;
-  align-items: center;
-  border-radius: var(--r-md);
-  border: 1px solid var(--line-2);
-  background: var(--ink-900);
-  overflow: hidden;
-}
-
-.stepper__btn {
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: transparent;
-  color: var(--text-2);
-  font-family: var(--font-display);
-  font-size: 16px;
-  cursor: pointer;
-  transition: background 0.16s ease, color 0.16s ease;
-}
-
-.stepper__btn:hover {
-  background: var(--ink-700);
-  color: var(--accent);
-}
-
-.stepper__input {
-  flex: 1;
-  min-width: 0;
-  height: 36px;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 600;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  outline: none;
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-
-.stepper__input::-webkit-outer-spin-button,
-.stepper__input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.quick {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.quick__chip {
-  height: 24px;
-  padding: 0 9px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--muted);
-  font-family: var(--font-display);
-  font-size: 11px;
-  cursor: pointer;
-  transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease;
-}
-
-.quick__chip:hover {
-  color: var(--text);
-  border-color: var(--line-3);
-}
-
-.quick__chip.is-on {
-  border-color: rgba(243, 193, 75, 0.5);
-  background: rgba(243, 193, 75, 0.12);
-  color: var(--accent);
 }
 
 .modal__foot {

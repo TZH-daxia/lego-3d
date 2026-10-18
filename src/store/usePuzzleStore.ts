@@ -1,11 +1,7 @@
 import { create } from 'zustand'
-import {
-  MAX_PART_COUNT,
-  createStarterContainer,
-  emptyCell,
-  normalizeContainer,
-} from '../data/container'
+import { createStarterContainer, normalizeContainer } from '../data/container'
 import { DEFAULT_COLOR } from '../data/colors'
+import { DOG_PUZZLE_ID, createDogPuzzle } from '../data/samples'
 import { SHAPE_MAP } from '../data/shapes'
 import {
   BOARD_MAX,
@@ -13,22 +9,17 @@ import {
   buildOccupancy,
   canPlace,
   findDropPosition,
+  hasSupport,
   mod4,
   orientedSize,
+  reseatBricks,
   rotateAnchor,
 } from '../lib/grid'
 import { loadSnapshot, saveSnapshot } from '../lib/storage'
-import type {
-  BlockedEvent,
-  Brick,
-  ContainerCell,
-  PartPreset,
-  Puzzle,
-  PuzzleMode,
-} from '../types'
+import type { BlockedEvent, Brick, Puzzle, PuzzleMode } from '../types'
 
-const clampCount = (n: number) =>
-  Math.min(MAX_PART_COUNT, Math.max(0, Math.round(Number(n) || 0)))
+/** 示例小狗只送一次：删掉之后不再塞回来（换造型时把版本号 +1） */
+const SEED_KEY = 'lego-3d:sample-seeded-v3'
 
 const EMPTY_BRICKS: Brick[] = []
 
@@ -76,16 +67,8 @@ interface PuzzleState {
   deleteSelected: () => void
   clearBricks: () => void
 
-  /** 容器：新增 / 编辑一个格子里的零件 */
-  setContainerCell: (cellId: string, part: PartPreset | null) => void
-  /** 容器：点非空格子 → 取一件放进托盘（数量 -1） */
+  /** 零件盒：点一个格子 → 把这个造型放进托盘（目录取用，不消耗） */
   takeFromCell: (cellId: string) => boolean
-  /** 容器：拖动格子里的东西换位（含空格） */
-  swapContainerCells: (fromId: string, toId: string) => void
-  /** 容器：底部新增一排空格子 */
-  addContainerRow: () => void
-  /** 容器：删掉最后一排（排内还有零件则不动） */
-  removeContainerRow: () => void
 }
 
 let blockedSeq = 0
@@ -102,17 +85,6 @@ export const usePuzzleStore = create<PuzzleState>((set, get) => {
     puzzles[idx] = { ...next, updatedAt: Date.now() }
     set({ puzzles })
     return puzzles[idx]
-  }
-
-  /** 容器格子的通用不可变更新 */
-  const patchContainer = (
-    fn: (cells: ContainerCell[], cols: number) => ContainerCell[] | null,
-  ) => {
-    patchActive((p) => {
-      const cells = fn(p.container.cells, p.container.cols)
-      if (!cells) return null
-      return { ...p, container: { ...p.container, cells } }
-    })
   }
 
   const editable = () => {
@@ -132,8 +104,8 @@ export const usePuzzleStore = create<PuzzleState>((set, get) => {
     const shape = SHAPE_MAP.get(shapeId)
     if (!shape) return null
     const size = orientedSize(shape, 0, 0)
-    const { cells } = buildOccupancy(puzzle.bricks)
-    const spot = findDropPosition(cells, size)
+    const occ = buildOccupancy(puzzle.bricks)
+    const spot = findDropPosition(occ, size)
     if (!spot) return null
     const brick: Brick = {
       id: uid('bk'),
@@ -160,20 +132,36 @@ export const usePuzzleStore = create<PuzzleState>((set, get) => {
 
     init: () => {
       const snap = loadSnapshot()
-      if (snap && snap.puzzles.length > 0) {
-        const puzzles = snap.puzzles.map((p) => ({
-          ...p,
-          container: normalizeContainer(p.container),
-        }))
-        const activeId =
-          snap.activeId && puzzles.some((p) => p.id === snap.activeId)
-            ? snap.activeId
-            : puzzles[0].id
-        set({ puzzles, activeId, hydrated: true })
-      } else {
-        const puzzle = makePuzzle('我的第一件作品')
-        set({ puzzles: [puzzle], activeId: puzzle.id, hydrated: true })
+      let puzzles = (snap?.puzzles ?? []).map((p) => ({
+        ...p,
+        container: normalizeContainer(p.container),
+        // 只修互相穿插的方块，手动抬起来的悬空件保持原样
+        bricks: reseatBricks(p.bricks),
+      }))
+      let activeId = snap?.activeId ?? null
+
+      // 第一次打开工作区时送一只示例小狗；删掉之后不会再塞回来
+      try {
+        if (!window.localStorage.getItem(SEED_KEY)) {
+          // 旧版本示例直接换成新的，避免工作区里留两只小狗
+          const dog = createDogPuzzle()
+          puzzles = [dog, ...puzzles.filter((p) => p.id !== DOG_PUZZLE_ID)]
+          activeId = dog.id
+          window.localStorage.setItem(SEED_KEY, '1')
+        }
+      } catch {
+        /* 存储不可用时跳过 */
       }
+
+      if (puzzles.length === 0) {
+        const puzzle = makePuzzle('我的第一件作品')
+        puzzles = [puzzle]
+        activeId = puzzle.id
+      }
+
+      const resolved =
+        activeId && puzzles.some((p) => p.id === activeId) ? activeId : puzzles[0].id
+      set({ puzzles, activeId: resolved, hydrated: true })
     },
 
     createPuzzle: (name) => {
@@ -241,12 +229,21 @@ export const usePuzzleStore = create<PuzzleState>((set, get) => {
       const shape = SHAPE_MAP.get(brick.shapeId)
       if (!shape) return
       const size = orientedSize(shape, brick.rx, brick.ry)
-      const { cells } = buildOccupancy(puzzle.bricks)
+      const occ = buildOccupancy(puzzle.bricks)
       const nx = brick.x + dx
       const ny = brick.y + dy
       const nz = brick.z + dz
 
-      if (!canPlace(cells, size, nx, ny, nz, brick.id)) {
+      // 任何方向都不能穿模
+      if (!canPlace(occ.cells, size, nx, ny, nz, brick.id)) {
+        reject(brick.id, 'move', [dx, dy, dz])
+        return
+      }
+      // 水平移动要求落点能扣上凸点；但已经有支撑的方块被手动抬起后（悬空中），
+      // 允许继续在空中平移，方便挪到别的垛子上再放下
+      const grounded =
+        brick.y === 0 || hasSupport(occ, size, brick.x, brick.y, brick.z, brick.id)
+      if (dy === 0 && grounded && !hasSupport(occ, size, nx, ny, nz, brick.id)) {
         reject(brick.id, 'move', [dx, dy, dz])
         return
       }
@@ -273,8 +270,15 @@ export const usePuzzleStore = create<PuzzleState>((set, get) => {
       const newSize = orientedSize(shape, nrx, nry)
       const anchor = rotateAnchor(brick, oldSize, newSize)
 
-      const { cells } = buildOccupancy(puzzle.bricks)
-      if (!canPlace(cells, newSize, anchor.x, brick.y, anchor.z, brick.id)) {
+      // 旋转后同样要检查穿模；原本就落稳的方块还要保证转完仍然扣得上
+      // （悬在空中被手动抬起的方块只查穿模，和水平移动保持一致）
+      const occ = buildOccupancy(puzzle.bricks)
+      const grounded =
+        brick.y === 0 || hasSupport(occ, oldSize, brick.x, brick.y, brick.z, brick.id)
+      const ok =
+        canPlace(occ.cells, newSize, anchor.x, brick.y, anchor.z, brick.id) &&
+        (!grounded || hasSupport(occ, newSize, anchor.x, brick.y, anchor.z, brick.id))
+      if (!ok) {
         reject(brick.id, 'rotate', [axis === 'x' ? 1 : 0, axis === 'y' ? 1 : 0, 0])
         return
       }
@@ -299,67 +303,13 @@ export const usePuzzleStore = create<PuzzleState>((set, get) => {
       set({ selectedBrickId: null })
     },
 
-    setContainerCell: (cellId, part) => {
-      if (!editable()) return
-      patchContainer((cells) =>
-        cells.map((c) =>
-          c.id === cellId
-            ? part
-              ? {
-                  ...c,
-                  shapeId: part.shapeId,
-                  color: part.color,
-                  count: clampCount(part.count),
-                }
-              : emptyCell(c.id)
-            : c,
-        ),
-      )
-    },
-
     takeFromCell: (cellId) => {
       const puzzle = editable()
       if (!puzzle) return false
       const cell = puzzle.container.cells.find((c) => c.id === cellId)
-      if (!cell || !cell.shapeId || !cell.color || cell.count <= 0) return false
-      if (!placeBrick(cell.shapeId, cell.color)) return false
-      patchContainer((cells) =>
-        cells.map((c) => (c.id === cellId ? { ...c, count: Math.max(0, c.count - 1) } : c)),
-      )
-      return true
-    },
-
-    swapContainerCells: (fromId, toId) => {
-      if (fromId === toId || !editable()) return
-      patchContainer((cells) => {
-        const i = cells.findIndex((c) => c.id === fromId)
-        const j = cells.findIndex((c) => c.id === toId)
-        if (i < 0 || j < 0) return null
-        // 交换内容但保留格子自身的 id，React key 不动 => 拖完不会闪一下
-        const next = cells.slice()
-        next[i] = { ...cells[j], id: cells[i].id }
-        next[j] = { ...cells[i], id: cells[j].id }
-        return next
-      })
-    },
-
-    addContainerRow: () => {
-      if (!editable()) return
-      patchContainer((cells, cols) => [
-        ...cells,
-        ...Array.from({ length: cols }, () => emptyCell()),
-      ])
-    },
-
-    removeContainerRow: () => {
-      if (!editable()) return
-      patchContainer((cells, cols) => {
-        if (cells.length <= cols) return null
-        const tail = cells.slice(cells.length - cols)
-        // 最后一排还有零件时不允许删除，避免误删
-        if (tail.some((c) => c.shapeId && c.count > 0)) return null
-        return cells.slice(0, cells.length - cols)
-      })
+      if (!cell || !cell.shapeId || !cell.color) return false
+      // 零件盒是"目录"：同一格可以无限取用，取完不消耗
+      return placeBrick(cell.shapeId, cell.color) !== null
     },
   }
 })

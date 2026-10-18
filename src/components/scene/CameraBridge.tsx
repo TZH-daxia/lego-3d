@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import {
   DEFAULT_CAMERA_POSITION,
@@ -24,6 +24,26 @@ const ORIGIN = new THREE.Vector3(0, 0, 0)
 export function CameraBridge() {
   const camera = useThree((s) => s.camera)
   const controls = useThree((s) => s.controls) as ControlsLike | null
+  const height = useThree((s) => s.size.height)
+  const prevHeight = useRef<number | null>(null)
+
+  /**
+   * 画布高度变了（拖动零件盒高度 / 窗口缩放）时等比推拉相机：
+   * 透视相机的 fov 是竖直方向，画布越矮模型看着越小，这里按高度比例补偿，
+   * 让托盘在屏幕上的视觉大小保持不变 —— 拖面板不会把 3D 图"放大/缩小"。
+   */
+  useEffect(() => {
+    const prev = prevHeight.current
+    prevHeight.current = height
+    if (!prev || !height || prev === height) return
+    const target = controls?.target ?? ORIGIN
+    const dir = camera.position.clone().sub(target)
+    const dist = dir.length()
+    if (dist < 1e-3) return
+    const next = THREE.MathUtils.clamp((dist * height) / prev, 8, 95)
+    camera.position.copy(target).add(dir.setLength(next))
+    controls?.update()
+  }, [height, camera, controls])
 
   useEffect(() => {
     registerOrbitControls(controls)

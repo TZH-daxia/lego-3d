@@ -1,12 +1,9 @@
 import { COLORS } from './colors'
-import type { Container, ContainerCell, PartPreset } from '../types'
+import { SHAPES_CATALOG } from './shapes'
+import type { Container, ContainerCell } from '../types'
 
-/** 一排固定 8 格 */
+/** 一排固定 8 格，零件按品类分块从左到右、从上到下铺 */
 export const CONTAINER_COLS = 8
-/** 初始 3 排 */
-export const CONTAINER_ROWS = 3
-/** 单格数量上限 */
-export const MAX_PART_COUNT = 99
 
 let cellSeed = 0
 export const newCellId = () =>
@@ -18,96 +15,74 @@ export const emptyCell = (id: string = newCellId()): ContainerCell => ({
   id,
   shapeId: null,
   color: null,
-  count: 0,
 })
 
-/** 空格子 = 没有造型，或者数量已经取完 */
-export const isEmptyCell = (cell: ContainerCell) => !cell.shapeId || cell.count <= 0
+/** 每个格子的随机颜色（经典乐高 12 色里抽一个） */
+const randomColor = () => COLORS[Math.floor(Math.random() * COLORS.length)].hex
+
+/** 零件盒一共要几排：造型数量除以列数向上取整 */
+const rowsFor = (count: number) => Math.max(1, Math.ceil(count / CONTAINER_COLS))
 
 /**
- * 生成容器。`presets` 按顺序填入最前面的格子，其余留空。
+ * 零件盒 =「全部造型的目录」。
+ *
+ * - 所有造型都摆出来，**先砖类、再板类、最后特殊件**，块内按常用度（`SHAPES_CATALOG`）
+ * - 一格一个造型，颜色随机
+ * - 格子不够就自动加一排，多出来的尾巴是空格（不可点）
+ * - 没有数量概念：格子里是"无限取用"的模子
  */
-export function buildContainer(rows: number, presets: PartPreset[] = []): Container {
+export function buildCatalogContainer(colorOf?: (shapeId: string) => string): Container {
+  const shapes = SHAPES_CATALOG
+  const total = rowsFor(shapes.length) * CONTAINER_COLS
   const cells: ContainerCell[] = []
-  const total = Math.max(rows, 1) * CONTAINER_COLS
   for (let i = 0; i < total; i++) {
-    const preset = presets[i]
+    const shape = shapes[i]
     cells.push(
-      preset
-        ? { id: newCellId(), shapeId: preset.shapeId, color: preset.color, count: preset.count }
+      shape
+        ? {
+            id: newCellId(),
+            shapeId: shape.id,
+            color: colorOf?.(shape.id) ?? randomColor(),
+          }
         : emptyCell(),
     )
   }
   return { cols: CONTAINER_COLS, cells }
 }
 
-const color = (index: number) => COLORS[index].hex
+export const createStarterContainer = () => buildCatalogContainer()
 
 /**
- * 新作品的初始零件盒：前两排填满常用件（砖 / 薄板 / 圆柱 / 平滑片 / 斜面），
- * 第三排留空，打开就能直接搭。
+ * 载入存档时的兜底：
+ * - 造型列表对不上（旧版本的手工零件盒、或者造型表新增了零件）→ 重建目录；
+ *   能认出老造型的沿用它的颜色，认不出的才随机，避免每次加载都变色
+ * - 对得上就原样保留，只补全缺失的 id / 颜色
  */
-export const STARTER_PRESETS: PartPreset[] = [
-  { shapeId: 'b2x2', color: color(0), count: 4 },
-  { shapeId: 'b1x2', color: color(4), count: 8 },
-  { shapeId: 'b1x1', color: color(2), count: 8 },
-  { shapeId: 'p2x4', color: color(3), count: 4 },
-  { shapeId: 'r1x1', color: color(10), count: 6 },
-  { shapeId: 's2x2', color: color(8), count: 2 },
-  { shapeId: 'b1x4', color: color(1), count: 4 },
-  { shapeId: 'b2x4', color: color(9), count: 3 },
-  { shapeId: 't1x1', color: color(11), count: 6 },
-  { shapeId: 'rp2x2', color: color(7), count: 2 },
-  { shapeId: 'p1x4', color: color(5), count: 8 },
-  { shapeId: 's2x4', color: color(6), count: 2 },
-  { shapeId: 'b2x3', color: color(3), count: 3 },
-  { shapeId: 'p1x2', color: color(1), count: 8 },
-  { shapeId: 'p2x6', color: color(9), count: 2 },
-  { shapeId: 'r2x2', color: color(7), count: 2 },
-]
-
-export const createStarterContainer = () => buildContainer(CONTAINER_ROWS, STARTER_PRESETS)
-
-/** 上一版的初始零件盒（6 件）：用来识别"用户还没动过的旧存档"并升级 */
-const LEGACY_STARTER: [string, number, number][] = [
-  ['b2x2', 0, 4],
-  ['b1x2', 4, 6],
-  ['b1x1', 2, 8],
-  ['p2x4', 3, 4],
-  ['r1x1', 10, 6],
-  ['s2x2', 8, 2],
-]
-
-const isLegacyStarter = (cells: ContainerCell[]) => {
-  if (cells.length < LEGACY_STARTER.length) return false
-  return cells.every((cell, index) => {
-    if (index >= LEGACY_STARTER.length) return !cell.shapeId || cell.count <= 0
-    const [shapeId, colorIndex, count] = LEGACY_STARTER[index]
-    return cell.shapeId === shapeId && cell.color === color(colorIndex) && cell.count === count
-  })
-}
-
-/** 补齐旧数据（早于容器功能保存的存档没有 container 字段） */
 export function normalizeContainer(raw: unknown): Container {
-  if (!raw || typeof raw !== 'object') return createStarterContainer()
-  const container = raw as Container
-  if (!Array.isArray(container.cells) || container.cells.length === 0) {
-    return createStarterContainer()
-  }
-  const cells: ContainerCell[] = container.cells.map((cell) => ({
-    id: cell?.id ?? newCellId(),
-    shapeId: cell?.shapeId ?? null,
-    color: cell?.color ?? null,
-    count: Math.min(MAX_PART_COUNT, Math.max(0, Number(cell?.count) || 0)),
-  }))
-  // 老存档没动过零件盒 → 换成新的默认零件，已经改过的原样保留
-  if (isLegacyStarter(cells)) return createStarterContainer()
+  const old = raw && typeof raw === 'object' ? (raw as Container) : null
+  const cells = Array.isArray(old?.cells) ? old.cells : []
 
-  // 列数统一成当前值（旧存档是 6 列），并补齐到当前排数的整数倍
-  const cols = CONTAINER_COLS
-  const next = cells.slice()
-  const minimum = CONTAINER_ROWS * cols
-  while (next.length < minimum) next.push(emptyCell())
-  while (next.length % cols !== 0) next.push(emptyCell())
-  return { cols, cells: next }
+  const expected = SHAPES_CATALOG.map((s) => s.id)
+  const total = rowsFor(expected.length) * CONTAINER_COLS
+  const matchesCatalog =
+    cells.length === total &&
+    expected.every((id, i) => (cells[i]?.shapeId ?? null) === id) &&
+    cells.slice(expected.length).every((c) => !c?.shapeId)
+
+  if (matchesCatalog) {
+    return {
+      cols: CONTAINER_COLS,
+      cells: cells.map((c) => ({
+        id: c.id ?? newCellId(),
+        shapeId: c.shapeId ?? null,
+        color: c.color ?? randomColor(),
+      })),
+    }
+  }
+
+  const colorByShape = new Map<string, string>()
+  for (const c of cells) {
+    if (c?.shapeId && c.color) colorByShape.set(c.shapeId, c.color)
+  }
+  return buildCatalogContainer((shapeId) => colorByShape.get(shapeId) ?? randomColor())
 }

@@ -1,7 +1,7 @@
 import { COLORS } from '../data/colors'
 import { useEditMode, usePuzzleStore, useSelectedBrickId } from '../store/usePuzzleStore'
 
-/** 色板：选中方块后点色块直接改色（新零件的颜色在零件弹窗里选） */
+/** 色板：零件盒唯一的改色入口 —— 选中方块后点色块直接换色 */
 export function ColorPalette() {
   const current = usePuzzleStore((s) => s.currentColor)
   const setCurrentColor = usePuzzleStore((s) => s.setCurrentColor)

@@ -9,8 +9,9 @@ const DIRECTIONS = [
 ] as const
 
 /**
- * 场景左侧的方向罗盘：跟着相机方位一起转，
+ * 右上角的方向罗盘：跟着相机方位一起转，
  * 告诉你托盘的前 / 后 / 左 / 右分别在哪边，和 W / A / S / D 一一对应。
+ * 整个罗盘就是一个按钮，点一下回到默认视角。
  */
 export function Compass() {
   const rotor = useRef<HTMLDivElement>(null)
@@ -21,7 +22,13 @@ export function Compass() {
   }, [])
 
   return (
-    <div className="compass" aria-label="方向指示">
+    <button
+      type="button"
+      className="compass"
+      title="方向指示 · 点一下回到正前方视角"
+      aria-label="方向指示，点击重置视角"
+      onClick={() => resetViewToDefault()}
+    >
       <div className="compass__dial">
         <div className="compass__rotor" ref={rotor}>
           <span className="compass__ring" />
@@ -35,14 +42,6 @@ export function Compass() {
           ))}
         </div>
       </div>
-      <button
-        type="button"
-        className="compass__reset"
-        title="回到正前方视角"
-        onClick={resetViewToDefault}
-      >
-        重置视角
-      </button>
-    </div>
+    </button>
   )
 }
